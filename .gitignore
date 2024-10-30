@@ -1,1 +1,3 @@
 ASVspoof_database
+*.pt
+__pycache__

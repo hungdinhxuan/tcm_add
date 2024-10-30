@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+from typing import Dict
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -10,6 +11,7 @@ from utils import reproducibility
 from utils import read_metadata
 import numpy as np
 from tqdm import tqdm
+from collate_fn import multi_view_collate_fn
 
 def evaluate_accuracy(dev_loader, model, device):
     val_loss = 0.0
@@ -41,20 +43,21 @@ def evaluate_accuracy(dev_loader, model, device):
 
 
 def produce_evaluation_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
+    data_loader = DataLoader(dataset, batch_size=64, shuffle=False, drop_last=False)
     model.eval()
     fname_list = []
     score_list = []
     text_list = []
 
-    for batch_x,utt_id in data_loader:
-        batch_x = batch_x.to(device)
-        batch_out, _ = model(batch_x)
-        batch_score = (batch_out[:, 1]
-                       ).data.cpu().numpy().ravel()
-        # add outputs
-        fname_list.extend(utt_id)
-        score_list.extend(batch_score.tolist())
+    with torch.no_grad():
+        for batch_x,utt_id in data_loader:
+            batch_x = batch_x.to(device)
+            batch_out, _ = model(batch_x)
+            batch_score = (batch_out[:, 1]
+                        ).data.cpu().numpy().ravel()
+            # add outputs
+            fname_list.extend(utt_id)
+            score_list.extend(batch_score.tolist())
 
     for f, cm in zip(fname_list, score_list):
         text_list.append('{} {}'.format(f, cm))
@@ -94,7 +97,163 @@ def train_epoch(train_loader, model, lr,optim, device):
         optimizer.step()
         i=i+1
     sys.stdout.flush()
-       
+
+def train_epoch_multiview(
+    train_loader, 
+    model, 
+    optimizer, 
+    device, 
+    weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}
+):
+    model.train()
+    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weight)
+    
+    # Initialize metrics for each view
+    running_losses = {f'view_{v}': 0.0 for v in weighted_views.keys()}
+    running_corrects = {f'view_{v}': 0 for v in weighted_views.keys()}
+    running_samples = {f'view_{v}': 0 for v in weighted_views.keys()}
+    
+    pbar = tqdm(train_loader)
+    for batch in pbar:
+        total_loss = 0.0
+        batch_metrics = {}
+        
+        # Process each view
+        for view_idx, (inputs, labels) in batch.items():
+            view = str(view_idx)  # Convert view index to string
+            
+            # Move data to device
+            inputs = inputs.to(device)
+            labels = labels.view(-1).type(torch.int64).to(device)
+            batch_size = inputs.size(0)
+            
+            # Forward pass
+            outputs, _ = model(inputs)
+            loss = criterion(outputs, labels) * weighted_views[view]
+            
+            # Calculate metrics
+            predictions = torch.argmax(outputs, dim=1)
+            correct = (predictions == labels).sum().item()
+            
+            # Update running metrics
+            running_losses[f'view_{view}'] += loss.item() * batch_size
+            running_corrects[f'view_{view}'] += correct
+            running_samples[f'view_{view}'] += batch_size
+            
+            # Accumulate total loss
+            total_loss += loss
+            
+            # Calculate batch metrics for progress bar
+            batch_metrics[f'loss_view_{view}'] = loss.item()
+            batch_metrics[f'acc_view_{view}'] = correct / batch_size
+        
+        # Optimization step
+        optimizer.zero_grad(set_to_none=True)
+        total_loss.backward()
+        optimizer.step()
+        
+        # Update progress bar
+        desc = f"Loss: {total_loss.item():.4f} | " + " | ".join(
+            f"V{k[-1]} Loss: {v:.4f}" for k, v in batch_metrics.items() if 'loss' in k
+        ) + " | " + " | ".join(
+            f"V{k[-1]} Acc: {v:.4f}" for k, v in batch_metrics.items() if 'acc' in k
+        )
+        pbar.set_description(desc)
+    
+    # Calculate epoch metrics
+    epoch_metrics = {}
+    for view in weighted_views.keys():
+        view_key = f'view_{view}'
+        if running_samples[view_key] > 0:
+            epoch_metrics[f'train_loss/{view_key}'] = running_losses[view_key] / running_samples[view_key]
+            epoch_metrics[f'train_acc/{view_key}'] = running_corrects[view_key] / running_samples[view_key]
+    
+    return epoch_metrics
+
+def dev_epoch_multiview(dev_loader, model, device, weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}):
+    model.eval()
+    
+    # Initialize metrics
+    total_loss = 0.0
+    num_total = 0
+    metrics = {
+        view: {'correct': 0, 'total': 0, 'loss': 0.0} 
+        for view in weighted_views.keys()
+    }
+    
+    # Set objective (Loss) function
+    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weight, reduction='sum')
+    
+    with torch.no_grad():
+        pbar = tqdm(dev_loader)
+        for batch in pbar:
+            loss_detail = {}
+            batch_total_loss = 0.0
+            
+            for view, (batch_x, batch_y) in batch.items():
+                view = str(view)  # Convert view to string for indexing
+                
+                # Move data to device
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+                
+                # Forward pass
+                batch_out, _ = model(batch_x)
+                
+                # Calculate loss
+                batch_loss = criterion(batch_out, batch_y) * weighted_views[view]
+                
+                # Calculate predictions
+                pred = batch_out.max(1)[1]
+                
+                # Update metrics for this view
+                batch_size = batch_x.size(0)
+                correct = pred.eq(batch_y).sum().item()
+                
+                metrics[view]['correct'] += correct
+                metrics[view]['total'] += batch_size
+                metrics[view]['loss'] += batch_loss.item()
+                
+                # Store batch metrics
+                loss_detail[f'dev_loss/view_{view}'] = batch_loss.item() / batch_size
+                loss_detail[f'dev_acc/view_{view}'] = correct / batch_size
+                
+                batch_total_loss += batch_loss.item()
+                num_total += batch_size
+            
+            # Update progress bar with current batch metrics
+            pbar.set_description(f"Loss: {batch_total_loss/batch_size:.4f}")
+    
+    # Calculate final metrics for each view
+    results = {}
+    total_loss = 0.0
+    total_accuracy = 0.0
+    
+    for view in metrics:
+        view_loss = metrics[view]['loss'] / metrics[view]['total']
+        view_accuracy = 100. * metrics[view]['correct'] / metrics[view]['total']
+        
+        results[f'dev_loss/view_{view}'] = view_loss
+        results[f'dev_acc/view_{view}'] = view_accuracy
+        
+        total_loss += view_loss * weighted_views[view]
+        total_accuracy += view_accuracy * weighted_views[view]
+    
+    # Calculate weighted averages
+    total_weight = sum(weighted_views.values())
+    avg_loss = total_loss / total_weight
+    avg_accuracy = total_accuracy / total_weight
+    
+    print(f'\nAverage Loss: {avg_loss:.4f}')
+    print(f'Average Accuracy: {avg_accuracy:.2f}%')
+    
+    for view in metrics:
+        print(f'View {view} - Accuracy: {results[f"dev_acc/view_{view}"]:.2f}% '
+              f'Loss: {results[f"dev_loss/view_{view}"]:.4f}')
+    
+    return avg_loss, results
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Conformer-W2V')
@@ -146,6 +305,9 @@ if __name__ == '__main__':
                         help='Comment to describe the saved scores')
     
     #Train
+    parser.add_argument('--is_multiview', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+                    help='Multiview train')
+    
     parser.add_argument('--train', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                     help='Whether to train the model')
     #Eval
@@ -257,7 +419,14 @@ if __name__ == '__main__':
     print('no. of training trials',len(files_id_train))
     
     train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'LA/{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
+    if not args.is_multiview:
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
+    else:
+        args.views = [1,2,3,4]
+        args.sample_rate = 16000
+        args.padding_type = 'repeat'
+        args.random_start = False
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True, collate_fn=lambda x: multi_view_collate_fn(x, args.views, args.sample_rate, args.padding_type, args.random_start))
     
     del train_set, label_trn
     
@@ -268,8 +437,14 @@ if __name__ == '__main__':
     dev_set = Dataset_train(args,list_IDs = files_id_dev,
 		    labels = labels_dev,
 		    base_dir = os.path.join(args.database_path+'LA/{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
-
-    dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
+    if not args.is_multiview:
+        dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
+    else:
+        args.views = [1,2,3,4]
+        args.sample_rate = 16000
+        args.padding_type = 'repeat'
+        args.random_start = False
+        dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False, collate_fn=lambda x: multi_view_collate_fn(x, args.views, args.sample_rate, args.padding_type, args.random_start))
     del dev_set,labels_dev
 
     
@@ -284,8 +459,15 @@ if __name__ == '__main__':
             np.savetxt( os.path.join(best_save_path, 'best_{}.pth'.format(i)), np.array((0,0)))
         while not_improving<args.num_epochs:
             print('######## Epoca {} ########'.format(epoch))
-            train_epoch(train_loader, model, args.lr, optimizer, device)
-            val_loss = evaluate_accuracy(dev_loader, model, device)
+
+            if not args.is_multiview:
+                train_epoch(train_loader, model, args.lr, optimizer, device)
+                val_loss = evaluate_accuracy(dev_loader, model, device)
+            else:
+                weighted_views = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}
+                train_epoch_multiview(train_loader, model, optimizer, device, weighted_views)
+                val_loss, _ = dev_epoch_multiview(dev_loader, model, device, weighted_views)
+
             if val_loss<best_loss:
                 best_loss=val_loss
                 torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))
@@ -331,7 +513,7 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(os.path.join(model_save_path, 'best.pth')))
         print('Model loaded : {}'.format(os.path.join(model_save_path, 'best.pth')))
 
-    eval_tracks=['LA', 'DF']
+    eval_tracks=['DF']
     if args.comment_eval:
         model_tag = model_tag + '_{}'.format(args.comment_eval)
 
@@ -341,9 +523,9 @@ if __name__ == '__main__':
             prefix_2019 = 'ASVspoof2019.{}'.format(tracks)
             prefix_2021 = 'ASVspoof2021.{}'.format(tracks)
 
-            file_eval = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}/{}_cm_protocols/{}.cm.eval.trl.txt'.format(tracks, prefix,prefix_2021)), is_eval=True)
+            file_eval = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.eval.trl.txt'.format( prefix,prefix_2021)), is_eval=True)
             print('no. of eval trials',len(file_eval))
-            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = os.path.join(args.database_path+'{}/ASVspoof2021_{}_eval/'.format(tracks,tracks)),track=tracks)
+            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = os.path.join(args.database_path+'ASVspoof2021_{}_eval/'.format(tracks)),track=tracks)
             produce_evaluation_file(eval_set, model, device, 'Scores/{}/{}.txt'.format(tracks, model_tag))
         else:
             print('Score file already exists')
