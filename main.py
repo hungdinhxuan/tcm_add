@@ -46,15 +46,15 @@ def produce_evaluation_file(dataset, model, device, save_path):
     fname_list = []
     score_list = []
     text_list = []
-
-    for batch_x,utt_id in data_loader:
-        batch_x = batch_x.to(device)
-        batch_out, _ = model(batch_x)
-        batch_score = (batch_out[:, 1]
-                       ).data.cpu().numpy().ravel()
-        # add outputs
-        fname_list.extend(utt_id)
-        score_list.extend(batch_score.tolist())
+    with torch.no_grad():
+        for batch_x,utt_id in data_loader:
+            batch_x = batch_x.to(device)
+            batch_out, _ = model(batch_x)
+            batch_score = (batch_out[:, 1]
+                        ).data.cpu().numpy().ravel()
+            # add outputs
+            fname_list.extend(utt_id)
+            score_list.extend(batch_score.tolist())
 
     for f, cm in zip(fname_list, score_list):
         text_list.append('{} {}'.format(f, cm))
@@ -253,21 +253,21 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=args.weight_decay)
      
     # define train dataloader
-    label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'LA/{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
+    label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
     print('no. of training trials',len(files_id_train))
     
-    train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'LA/{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
+    train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
     
     del train_set, label_trn
     
     # define validation dataloader
-    labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'LA/{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
+    labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
     print('no. of validation trials',len(files_id_dev))
 
     dev_set = Dataset_train(args,list_IDs = files_id_dev,
 		    labels = labels_dev,
-		    base_dir = os.path.join(args.database_path+'LA/{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
+		    base_dir = os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
 
     dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
     del dev_set,labels_dev

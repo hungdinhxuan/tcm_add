@@ -19,8 +19,8 @@ class Dataset_train(Dataset):
         utt_id = self.list_IDs[index]
         X, fs = librosa.load(self.base_dir+utt_id+'.flac', sr=16000)
         Y=process_Rawboost_feature(X, fs, self.args, self.algo)
-        X_pad= pad(Y, self.cut)
-        x_inp= Tensor(X_pad)
+        #X_pad= pad(Y, self.cut)
+        x_inp= Tensor(Y)
         target = self.labels[utt_id]
         return x_inp, target
 

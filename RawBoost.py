@@ -94,9 +94,9 @@ def SSI_additive_noise(x,SNRmin,SNRmax,nBands,minF,maxF,minBW,maxBW,minCoeff,max
     SNR = randRange(SNRmin, SNRmax, 0)
     noise = noise / np.linalg.norm(noise,2) * np.linalg.norm(x,2) / 10.0**(0.05 * SNR)
     x = x + noise
+    return x
 
 #--------------RawBoost data augmentation algorithms---------------------------##
-
 def process_Rawboost_feature(feature, sr,args,algo):
     
     # Data process by Convolutive noise (1st algo)
@@ -111,7 +111,6 @@ def process_Rawboost_feature(feature, sr,args,algo):
                             
     # Data process by coloured additive noise (3rd algo)
     elif algo==3:
-        
         feature=SSI_additive_noise(feature,args.SNRmin,args.SNRmax,args.nBands,args.minF,args.maxF,args.minBW,args.maxBW,args.minCoeff,args.maxCoeff,args.minG,args.maxG,sr)
     
     # Data process by all 3 algo. together in series (1+2+3)
@@ -158,5 +157,4 @@ def process_Rawboost_feature(feature, sr,args,algo):
     else:
         
         feature=feature
-    
-    return feature    
+    return feature   

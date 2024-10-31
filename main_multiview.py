@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from data_utils import Dataset_train, Dataset_eval
+from data_utils_multiview import Dataset_train as Dataset_train_multiview
 from model import Model
 from utils import reproducibility
 from utils import read_metadata
@@ -415,13 +416,15 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=args.weight_decay)
      
     # define train dataloader
-    label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'LA/{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
+    label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
     print('no. of training trials',len(files_id_train))
     
-    train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'LA/{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
     if not args.is_multiview:
+        train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
         train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
     else:
+        train_set=Dataset_train_multiview(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
+        print('Multiview training')
         args.views = [1,2,3,4]
         args.sample_rate = 16000
         args.padding_type = 'repeat'
@@ -431,19 +434,17 @@ if __name__ == '__main__':
     del train_set, label_trn
     
     # define validation dataloader
-    labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'LA/{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
+    labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
     print('no. of validation trials',len(files_id_dev))
 
-    dev_set = Dataset_train(args,list_IDs = files_id_dev,
-		    labels = labels_dev,
-		    base_dir = os.path.join(args.database_path+'LA/{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
+    
     if not args.is_multiview:
+        dev_set = Dataset_train(args,list_IDs = files_id_dev,
+		    labels = labels_dev,
+		    base_dir = os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
         dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
     else:
-        args.views = [1,2,3,4]
-        args.sample_rate = 16000
-        args.padding_type = 'repeat'
-        args.random_start = False
+        dev_set = Dataset_train_multiview(args,list_IDs = files_id_dev, labels=labels_dev, base_dir = os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
         dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False, collate_fn=lambda x: multi_view_collate_fn(x, args.views, args.sample_rate, args.padding_type, args.random_start))
     del dev_set,labels_dev
 
