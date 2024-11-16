@@ -31,7 +31,59 @@ def read_metadata(dir_meta, is_eval=False):
              file_list.append(key)
              d_meta[key] = 1 if label == 'bonafide' else 0
         return d_meta,file_list
+
+def read_metadata_pro(dir_meta):
+    d_meta = {}
+    file_list=[]
+    with open(dir_meta, 'r') as f:
+         l_meta = f.readlines()
+
+    for line in l_meta:
+            key,label = line.strip().split()
+            file_list.append(key)
+            d_meta[key] = 1 if label == 'bonafide' else 0
+    return d_meta,file_list
+
+def read_metadata_eval(dir_meta, no_label=False):
+    file_list=[]
+    with open(dir_meta, 'r') as f:
+         l_meta = f.readlines()
     
+    for line in l_meta:
+        if no_label:
+            key= line.strip()
+        else:
+            key,label = line.strip().split()
+        file_list.append(key)
+    return file_list
+
+def read_metadata_other(dir_meta, is_train=False, is_eval=False, is_dev=False):
+    # bonafide: 1, spoof: 0
+    d_meta = {}
+    file_list=[]
+    with open(dir_meta, 'r') as f:
+        l_meta = f.readlines()
+    if (is_train):
+        for line in l_meta:
+            utt, subset, label = line.strip().split()
+            if subset == 'train':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0
+    if (is_dev):
+        for line in l_meta:
+            utt, subset, label = line.strip().split()
+            if subset == 'dev':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0    
+    if (is_eval):
+
+        for line in l_meta:
+            utt, subset, label = line.strip().split()
+            if subset == 'eval':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0
+    return file_list, d_meta
+
 def reproducibility(random_seed, args=None):                                  
     torch.manual_seed(random_seed)
     random.seed(random_seed)

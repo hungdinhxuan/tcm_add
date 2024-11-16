@@ -7,10 +7,11 @@ from torch.utils.data import DataLoader
 from data_utils import Dataset_train, Dataset_eval
 from model import Model
 from utils import reproducibility
-from utils import read_metadata, read_metadata_eval, read_metadata_other
-from data_utils_multiview import Dataset_var_eval, Dataset_var_eval2
+from utils import read_metadata
 import numpy as np
 from tqdm import tqdm
+from data_utils_multiview import Dataset_train as Dataset_train_multiview
+from collate_fn import multi_view_pad_collate_fn
 
 def evaluate_accuracy(dev_loader, model, device):
     val_loss = 0.0
@@ -80,6 +81,7 @@ def train_epoch(train_loader, model, lr,optim, device):
     i=0
     pbar = tqdm(train_loader)
     for i, batch in enumerate(pbar):
+        
         batch_x, batch_y = batch
 
         batch_size = batch_x.size(0)
@@ -146,8 +148,6 @@ if __name__ == '__main__':
     parser.add_argument('--comment_eval', type=str, default=None,
                         help='Comment to describe the saved scores')
     
-    parser.add_argument('--dataset', type=str, default='asvspoof',
-                        help='Comment to describe the saved model')
     #Train
     parser.add_argument('--train', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                     help='Whether to train the model')
@@ -255,190 +255,103 @@ if __name__ == '__main__':
     #set Adam optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=args.weight_decay)
      
-    if args.dataset == 'asvspoof':
-        # define train dataloader
-        label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
-        print('no. of training trials',len(files_id_train))
-        
-        train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
-        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
-        
-        del train_set, label_trn
-        
-        # define validation dataloader
-        labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
-        print('no. of validation trials',len(files_id_dev))
+    # define train dataloader
+    label_trn, files_id_train = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.train.trn.txt'.format(prefix,prefix_2019)), is_eval=False)
+    print('no. of training trials',len(files_id_train) * 4)
+    
+    train_set=Dataset_train_multiview(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0],args.track)),algo=args.algo)
+    args.views = [1,2,3,4]
+    args.sample_rate = 16000
+    args.padding_type = 'repeat'
+    args.random_start = False
 
-        dev_set = Dataset_train(args,list_IDs = files_id_dev,
-                labels = labels_dev,
-                base_dir = os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True, collate_fn=lambda x: multi_view_pad_collate_fn(x, args.views, args.sample_rate, args.padding_type, args.random_start))
+    
+    del train_set, label_trn
+    
+    # define validation dataloader
+    labels_dev, files_id_dev = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}_cm_protocols/{}.cm.dev.trl.txt'.format(prefix,prefix_2019)), is_eval=False)
+    print('no. of validation trials',len(files_id_dev) * 4)
 
-        dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
-        del dev_set,labels_dev
+    dev_set = Dataset_train_multiview(args,list_IDs = files_id_dev,
+		    labels = labels_dev,
+		    base_dir = os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0],args.track)), algo=args.algo)
 
-        
-        ##################### Training and validation #####################
-        num_epochs = args.num_epochs
-        not_improving=0
-        epoch=0
-        bests=np.ones(n_mejores,dtype=float)*float('inf')
-        best_loss=float('inf')
-        if args.train:
-            for i in range(n_mejores):
-                np.savetxt( os.path.join(best_save_path, 'best_{}.pth'.format(i)), np.array((0,0)))
-            while not_improving<args.num_epochs:
-                print('######## Epoca {} ########'.format(epoch))
-                train_epoch(train_loader, model, args.lr, optimizer, device)
-                val_loss = evaluate_accuracy(dev_loader, model, device)
-                if val_loss<best_loss:
-                    best_loss=val_loss
-                    torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))
-                    print('New best epoch')
-                    not_improving=0
-                else:
-                    not_improving+=1
-                for i in range(n_mejores):
-                    if bests[i]>val_loss:
-                        for t in range(n_mejores-1,i,-1):
-                            bests[t]=bests[t-1]
-                            os.system('mv {}/best_{}.pth {}/best_{}.pth'.format(best_save_path, t-1, best_save_path, t))
-                        bests[i]=val_loss
-                        torch.save(model.state_dict(), os.path.join(best_save_path, 'best_{}.pth'.format(i)))
-                        break
-                print('\n{} - {}'.format(epoch, val_loss))
-                print('n-best loss:', bests)
-                #torch.save(model.state_dict(), os.path.join(model_save_path, 'epoch_{}.pth'.format(epoch)))
-                epoch+=1
-                if epoch>74:
-                    break
-            print('Total epochs: ' + str(epoch) +'\n')
+    dev_loader = DataLoader(dev_set, batch_size=args.batch_size, num_workers=10, shuffle=False, collate_fn=lambda x: multi_view_pad_collate_fn(x, args.views, args.sample_rate, args.padding_type, args.random_start))
+    del dev_set,labels_dev
 
-
-        print('######## Eval ########')
-        if args.average_model:
-            sdl=[]
-            model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
-            print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
-            sd = model.state_dict()
-            for i in range(1,args.n_average_model):
-                model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
-                print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
-                sd2 = model.state_dict()
-                for key in sd:
-                    sd[key]=(sd[key]+sd2[key])
-            for key in sd:
-                sd[key]=(sd[key])/args.n_average_model
-            model.load_state_dict(sd)
-            torch.save(model.state_dict(), os.path.join(best_save_path, 'avg_5_best_{}.pth'.format(i)))
-            print('Model loaded average of {} best models in {}'.format(args.n_average_model, best_save_path))
-        else:
-            model.load_state_dict(torch.load(os.path.join(model_save_path, 'best.pth')))
-            print('Model loaded : {}'.format(os.path.join(model_save_path, 'best.pth')))
-
-        eval_tracks=['LA', 'DF']
-        if args.comment_eval:
-            model_tag = model_tag + '_{}'.format(args.comment_eval)
-
-        for tracks in eval_tracks:
-            if not os.path.exists('Scores/{}/{}.txt'.format(tracks, model_tag)):
-                prefix      = 'ASVspoof_{}'.format(tracks)
-                prefix_2019 = 'ASVspoof2019.{}'.format(tracks)
-                prefix_2021 = 'ASVspoof2021.{}'.format(tracks)
-
-                file_eval = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}/{}_cm_protocols/{}.cm.eval.trl.txt'.format(tracks, prefix,prefix_2021)), is_eval=True)
-                print('no. of eval trials',len(file_eval))
-                eval_set=Dataset_eval(list_IDs = file_eval,base_dir = os.path.join(args.database_path+'{}/ASVspoof2021_{}_eval/'.format(tracks,tracks)),track=tracks)
-                produce_evaluation_file(eval_set, model, device, 'Scores/{}/{}.txt'.format(tracks, model_tag))
+    
+    ##################### Training and validation #####################
+    num_epochs = args.num_epochs
+    not_improving=0
+    epoch=0
+    bests=np.ones(n_mejores,dtype=float)*float('inf')
+    best_loss=float('inf')
+    if args.train:
+        for i in range(n_mejores):
+            np.savetxt( os.path.join(best_save_path, 'best_{}.pth'.format(i)), np.array((0,0)))
+        while not_improving<args.num_epochs:
+            print('######## Epoca {} ########'.format(epoch))
+            train_epoch(train_loader, model, args.lr, optimizer, device)
+            val_loss = evaluate_accuracy(dev_loader, model, device)
+            if val_loss<best_loss:
+                best_loss=val_loss
+                torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))
+                print('New best epoch')
+                not_improving=0
             else:
-                print('Score file already exists')
-    else:
-        print(f'other dataset: {args.dataset}')
-        label_trn, files_id_train = read_metadata_other( dir_meta =  args.protocols_path, is_train=True)
-        print('no. of training trials',len(files_id_train))
-        
-        train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path),algo=args.algo,format='')
-        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers = 10, shuffle=True,drop_last = True)
-        
-        del train_set, label_trn
-        
-        # define validation dataloader
-        labels_dev, files_id_dev = read_metadata_other( dir_meta =  args.protocols_path, is_dev=True)
-        print('no. of validation trials',len(files_id_dev))
-
-        dev_set = Dataset_train(args,list_IDs = files_id_dev,
-                labels = labels_dev,
-                base_dir = os.path.join(args.database_path), algo=args.algo, format='')
-
-        dev_loader = DataLoader(dev_set, batch_size=8, num_workers=10, shuffle=False)
-        del dev_set,labels_dev
-
-        num_epochs = args.num_epochs
-        not_improving=0
-        epoch=0
-        bests=np.ones(n_mejores,dtype=float)*float('inf')
-        best_loss=float('inf')
-        if args.train:
+                not_improving+=1
             for i in range(n_mejores):
-                np.savetxt( os.path.join(best_save_path, 'best_{}.pth'.format(i)), np.array((0,0)))
-            while not_improving<args.num_epochs:
-                print('######## Epoca {} ########'.format(epoch))
-                train_epoch(train_loader, model, args.lr, optimizer, device)
-                val_loss = evaluate_accuracy(dev_loader, model, device)
-                if val_loss<best_loss:
-                    best_loss=val_loss
-                    torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))
-                    print('New best epoch')
-                    not_improving=0
-                else:
-                    not_improving+=1
-                for i in range(n_mejores):
-                    if bests[i]>val_loss:
-                        for t in range(n_mejores-1,i,-1):
-                            bests[t]=bests[t-1]
-                            os.system('mv {}/best_{}.pth {}/best_{}.pth'.format(best_save_path, t-1, best_save_path, t))
-                        bests[i]=val_loss
-                        torch.save(model.state_dict(), os.path.join(best_save_path, 'best_{}.pth'.format(i)))
-                        break
-                print('\n{} - {}'.format(epoch, val_loss))
-                print('n-best loss:', bests)
-                #torch.save(model.state_dict(), os.path.join(model_save_path, 'epoch_{}.pth'.format(epoch)))
-                epoch+=1
-                if epoch>74:
+                if bests[i]>val_loss:
+                    for t in range(n_mejores-1,i,-1):
+                        bests[t]=bests[t-1]
+                        os.system('mv {}/best_{}.pth {}/best_{}.pth'.format(best_save_path, t-1, best_save_path, t))
+                    bests[i]=val_loss
+                    torch.save(model.state_dict(), os.path.join(best_save_path, 'best_{}.pth'.format(i)))
                     break
-            print('Total epochs: ' + str(epoch) +'\n')
+            print('\n{} - {}'.format(epoch, val_loss))
+            print('n-best loss:', bests)
+            #torch.save(model.state_dict(), os.path.join(model_save_path, 'epoch_{}.pth'.format(epoch)))
+            epoch+=1
+            if epoch>74:
+                break
+        print('Total epochs: ' + str(epoch) +'\n')
 
 
-        print('######## Eval ########')
-        if args.average_model:
-            sdl=[]
-            model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
-            print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
-            sd = model.state_dict()
-            for i in range(1,args.n_average_model):
-                model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
-                print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
-                sd2 = model.state_dict()
-                for key in sd:
-                    sd[key]=(sd[key]+sd2[key])
+    print('######## Eval ########')
+    if args.average_model:
+        sdl=[]
+        model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
+        print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(0))))
+        sd = model.state_dict()
+        for i in range(1,args.n_average_model):
+            model.load_state_dict(torch.load(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
+            print('Model loaded : {}'.format(os.path.join(best_save_path, 'best_{}.pth'.format(i))))
+            sd2 = model.state_dict()
             for key in sd:
-                sd[key]=(sd[key])/args.n_average_model
-            model.load_state_dict(sd)
-            torch.save(model.state_dict(), os.path.join(best_save_path, 'avg_5_best_{}.pth'.format(i)))
-            print('Model loaded average of {} best models in {}'.format(args.n_average_model, best_save_path))
-        else:
-            model.load_state_dict(torch.load(os.path.join(model_save_path, 'best.pth')))
-            print('Model loaded : {}'.format(os.path.join(model_save_path, 'best.pth')))
+                sd[key]=(sd[key]+sd2[key])
+        for key in sd:
+            sd[key]=(sd[key])/args.n_average_model
+        model.load_state_dict(sd)
+        torch.save(model.state_dict(), os.path.join(best_save_path, 'avg_5_best_{}.pth'.format(i)))
+        print('Model loaded average of {} best models in {}'.format(args.n_average_model, best_save_path))
+    else:
+        model.load_state_dict(torch.load(os.path.join(model_save_path, 'best.pth')))
+        print('Model loaded : {}'.format(os.path.join(model_save_path, 'best.pth')))
 
-        eval_tracks=['LA', 'DF']
-        if args.comment_eval:
-            model_tag = model_tag + '_{}'.format(args.comment_eval)
+    eval_tracks=['LA', 'DF']
+    if args.comment_eval:
+        model_tag = model_tag + '_{}'.format(args.comment_eval)
 
-        file_eval, _ = read_metadata_other( dir_meta = args.protocols_path, is_eval=True)
-        print('no. of eval trials',len(file_eval))
-        if args.var:
-            print('var-length eval')
-            eval_set=Dataset_var_eval2(list_IDs = file_eval,base_dir = args.database_path, format='')
-            produce_evaluation_file(eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
+    for tracks in eval_tracks:
+        if not os.path.exists('Scores/{}/{}.txt'.format(tracks, model_tag)):
+            prefix      = 'ASVspoof_{}'.format(tracks)
+            prefix_2019 = 'ASVspoof2019.{}'.format(tracks)
+            prefix_2021 = 'ASVspoof2021.{}'.format(tracks)
+
+            file_eval = read_metadata( dir_meta =  os.path.join(args.protocols_path+'{}/{}_cm_protocols/{}.cm.eval.trl.txt'.format(tracks, prefix,prefix_2021)), is_eval=True)
+            print('no. of eval trials',len(file_eval))
+            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = os.path.join(args.database_path+'{}/ASVspoof2021_{}_eval/'.format(tracks,tracks)),track=tracks)
+            produce_evaluation_file(eval_set, model, device, 'Scores/{}/{}.txt'.format(tracks, model_tag))
         else:
-            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = args.database_path, cut=args.cut, track='',format='')
-            produce_evaluation_file(eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
+            print('Score file already exists')

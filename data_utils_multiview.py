@@ -39,3 +39,32 @@ class Dataset_eval(Dataset):
         X_pad = pad(X,self.cut)
         x_inp = Tensor(X_pad)
         return x_inp, utt_id  
+
+class Dataset_var_eval(Dataset):
+    def __init__(self, list_IDs, base_dir, track, format='.flac'):
+        '''self.list_IDs	: list of strings (each string: utt key),'''
+        self.list_IDs = list_IDs
+        self.base_dir = base_dir
+        self.track = track
+        self.format=format
+    def __len__(self):
+        return len(self.list_IDs)
+    def __getitem__(self, index):  
+        utt_id = self.list_IDs[index]
+        X, fs = librosa.load(self.base_dir+utt_id+self.format, sr=16000)
+        x_inp = Tensor(X)
+        return x_inp, utt_id  
+
+class Dataset_var_eval2(Dataset):
+    def __init__(self, list_IDs, base_dir,format='.flac'):
+        '''self.list_IDs	: list of strings (each string: utt key),'''
+        self.list_IDs = list_IDs
+        self.base_dir = base_dir
+        self.format=format
+    def __len__(self):
+        return len(self.list_IDs)
+    def __getitem__(self, index):  
+        utt_id = self.list_IDs[index]
+        X, fs = librosa.load(self.base_dir+utt_id+self.format, sr=16000)
+        x_inp = Tensor(X)
+        return x_inp, utt_id  

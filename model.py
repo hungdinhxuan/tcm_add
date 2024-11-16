@@ -36,7 +36,7 @@ class MyConformer(nn.Module):
             list_attn_weight.append(attn_weight)
     embedding=x[:,0,:] #[bs, emb_size]
     out=self.fc5(embedding) #[bs,2]
-    return out, list_attn_weight
+    return out, list_attn_weight,embedding
 
 class SSLModel(nn.Module): #W2V
     def __init__(self,device):
@@ -79,14 +79,29 @@ class Model(nn.Module):
         self.selu = nn.SELU(inplace=True)
         self.conformer=MyConformer(emb_size=args.emb_size, n_encoders=args.num_encoders,
         heads=args.heads, kernel_size=args.kernel_size)
-    def forward(self, x):
+    def forward(self, x, is_embedding=False, last_hidden_state=False):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
         x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
+        if is_embedding:
+            return x_ssl_feat
         x=self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim) (bs, 208, 256)
         x = x.unsqueeze(dim=1) # add channel #(bs, 1, frame_number, 256)
         x = self.first_bn(x)
         x = self.selu(x)
         x = x.squeeze(dim=1)
-        out, attn_score =self.conformer(x,self.device)
+        out, attn_score,embedding =self.conformer(x,self.device)
+        if last_hidden_state:
+            return embedding
         return out, attn_score
 
+
+# if __name__ == '__main__':
+#     from torchinfo import summary
+#     class Args:
+#         emb_size=128
+#         num_encoders=4
+#         heads=4
+#         kernel_size=31
+#     args = Args()
+#     model = Model(args=args, device='cpu')
+#     print(summary(model, input_size=(1, 66800), device='cpu', depth=7))
