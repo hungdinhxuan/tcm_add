@@ -12,12 +12,12 @@ from data_utils_multiview import Dataset_var_eval, Dataset_var_eval2
 import numpy as np
 from tqdm import tqdm
 
-def evaluate_accuracy(dev_loader, model, device):
+def evaluate_accuracy(dev_loader, model, device,weight=[0.1, 0.9]):
     val_loss = 0.0
     num_total = 0.0
     correct=0
     model.eval()
-    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    weight = torch.FloatTensor(weight).to(device)
     criterion = nn.CrossEntropyLoss(weight=weight)
     num_batch = len(dev_loader)
     i=0
@@ -69,12 +69,12 @@ def produce_evaluation_file(dataset, model, device, save_path):
     fh.close()
     print('Scores saved to {}'.format(save_path))
 
-def train_epoch(train_loader, model, lr,optim, device):
+def train_epoch(train_loader, model, lr,optim, device, weight=[0.1, 0.9]):
     num_total = 0.0
     model.train()
 
     #set objective (Loss) functions
-    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    weight = torch.FloatTensor(weight).to(device)
     criterion = nn.CrossEntropyLoss(weight=weight)
     num_batch = len(train_loader)
     i=0
@@ -353,7 +353,7 @@ if __name__ == '__main__':
                 print('Score file already exists')
     else:
         print(f'other dataset: {args.dataset}')
-        label_trn, files_id_train = read_metadata_other( dir_meta =  args.protocols_path, is_train=True)
+        files_id_train,label_trn = read_metadata_other( dir_meta =  args.protocols_path, is_train=True)
         print('no. of training trials',len(files_id_train))
         
         train_set=Dataset_train(args,list_IDs = files_id_train,labels = label_trn,base_dir = os.path.join(args.database_path),algo=args.algo,format='')
@@ -362,7 +362,7 @@ if __name__ == '__main__':
         del train_set, label_trn
         
         # define validation dataloader
-        labels_dev, files_id_dev = read_metadata_other( dir_meta =  args.protocols_path, is_dev=True)
+        files_id_dev,labels_dev = read_metadata_other( dir_meta =  args.protocols_path, is_dev=True)
         print('no. of validation trials',len(files_id_dev))
 
         dev_set = Dataset_train(args,list_IDs = files_id_dev,
@@ -382,8 +382,9 @@ if __name__ == '__main__':
                 np.savetxt( os.path.join(best_save_path, 'best_{}.pth'.format(i)), np.array((0,0)))
             while not_improving<args.num_epochs:
                 print('######## Epoca {} ########'.format(epoch))
-                train_epoch(train_loader, model, args.lr, optimizer, device)
-                val_loss = evaluate_accuracy(dev_loader, model, device)
+                ce_weight=[0.5, 0.5]
+                train_epoch(train_loader, model, args.lr, optimizer, device, weight=ce_weight)
+                val_loss = evaluate_accuracy(dev_loader, model, device, weight=ce_weight)
                 if val_loss<best_loss:
                     best_loss=val_loss
                     torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))

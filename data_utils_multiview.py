@@ -6,18 +6,19 @@ from RawBoost import  process_Rawboost_feature
 from utils import pad
 			
 class Dataset_train(Dataset):
-    def __init__(self, args, list_IDs, labels, base_dir, algo):
+    def __init__(self, args, list_IDs, labels, base_dir, algo, format='.flac'):
         self.list_IDs = list_IDs
         self.labels = labels
         self.base_dir = base_dir
         self.algo=algo
         self.args=args
         self.cut=66800
+        self.format=format
     def __len__(self):
         return len(self.list_IDs)
     def __getitem__(self, index):
         utt_id = self.list_IDs[index]
-        X, fs = librosa.load(self.base_dir+utt_id+'.flac', sr=16000)
+        X, fs = librosa.load(self.base_dir+utt_id+self.format, sr=16000)
         Y=process_Rawboost_feature(X, fs, self.args, self.algo)
         #X_pad= pad(Y, self.cut)
         x_inp= Tensor(Y)

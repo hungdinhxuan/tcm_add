@@ -106,10 +106,11 @@ def train_epoch_multiview(
     model, 
     optimizer, 
     device, 
-    weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}
+    weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0},
+    ce_weight = [0.1, 0.9]
 ):
     model.train()
-    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    weight = torch.FloatTensor(ce_weight).to(device)
     criterion = nn.CrossEntropyLoss(weight=weight)
     
     # Initialize metrics for each view
@@ -174,7 +175,7 @@ def train_epoch_multiview(
     
     return epoch_metrics
 
-def dev_epoch_multiview(dev_loader, model, device, weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}):
+def dev_epoch_multiview(dev_loader, model, device, weighted_views: Dict[str, float] = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}, ce_weight = [0.1, 0.9]):
     model.eval()
     
     # Initialize metrics
@@ -186,7 +187,7 @@ def dev_epoch_multiview(dev_loader, model, device, weighted_views: Dict[str, flo
     }
     
     # Set objective (Loss) function
-    weight = torch.FloatTensor([0.1, 0.9]).to(device)
+    weight = torch.FloatTensor(ce_weight).to(device)
     criterion = nn.CrossEntropyLoss(weight=weight, reduction='sum')
     
     with torch.no_grad():
@@ -539,7 +540,7 @@ if __name__ == '__main__':
     
     else:
         print(f'other dataset: {args.dataset}')
-        label_trn, files_id_train = read_metadata_other( dir_meta =  os.path.join(args.protocols_path), is_train=True)
+        files_id_train,label_trn = read_metadata_other( dir_meta =  os.path.join(args.protocols_path), is_train=True)
         print('no. of training trials',len(files_id_train))
         
         if not args.is_multiview:
@@ -557,7 +558,7 @@ if __name__ == '__main__':
         del train_set, label_trn
         
         # define validation dataloader
-        labels_dev, files_id_dev = read_metadata_other( dir_meta =  os.path.join(args.protocols_path), is_dev=True)
+        files_id_dev,labels_dev = read_metadata_other( dir_meta =  os.path.join(args.protocols_path), is_dev=True)
         print('no. of validation trials',len(files_id_dev))
 
         
@@ -586,9 +587,10 @@ if __name__ == '__main__':
                     val_loss = evaluate_accuracy(dev_loader, model, device)
                 else:
                     weighted_views = {'1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0}
-                    train_epoch_multiview(train_loader, model, optimizer, device, weighted_views)
-                    val_loss, _ = dev_epoch_multiview(dev_loader, model, device, weighted_views)
-                    
+                    ce_weight = [0.5, 0.5] # balanced weights for cross-entropy loss
+                    train_epoch_multiview(train_loader, model, optimizer, device, weighted_views, ce_weight)
+                    val_loss, _ = dev_epoch_multiview(dev_loader, model, device, weighted_views, ce_weight)
+
                 if val_loss<best_loss:
                     best_loss=val_loss
                     torch.save(model.state_dict(), os.path.join(model_save_path, 'best.pth'))
