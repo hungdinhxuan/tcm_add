@@ -273,7 +273,7 @@ if __name__ == '__main__':
         print('no. of training trials', len(files_id_train))
 
         train_set = Dataset_train(args, list_IDs=files_id_train, labels=label_trn, base_dir=os.path.join(
-            args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo)
+            args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo, cut=args.cut)
         train_loader = DataLoader(
             train_set, batch_size=args.batch_size, num_workers=10, shuffle=True, drop_last=True)
 
@@ -286,7 +286,7 @@ if __name__ == '__main__':
 
         dev_set = Dataset_train(args, list_IDs=files_id_dev,
                                 labels=labels_dev,
-                                base_dir=os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo)
+                                base_dir=os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo, cut=args.cut)
 
         dev_loader = DataLoader(dev_set, batch_size=8,
                                 num_workers=10, shuffle=False)
@@ -361,7 +361,7 @@ if __name__ == '__main__':
             print('Model loaded : {}'.format(
                 os.path.join(model_save_path, 'best.pth')))
 
-        eval_tracks = ['LA', 'DF']
+        eval_tracks = ['DF']
         if args.comment_eval:
             model_tag = model_tag + '_{}'.format(args.comment_eval)
 
@@ -387,7 +387,7 @@ if __name__ == '__main__':
         print('no. of training trials', len(files_id_train))
 
         train_set = Dataset_train(args, list_IDs=files_id_train, labels=label_trn, base_dir=os.path.join(
-            args.database_path), algo=args.algo, format='')
+            args.database_path), algo=args.algo, format='', cut=args.cut)
         train_loader = DataLoader(
             train_set, batch_size=args.batch_size, num_workers=10, shuffle=True, drop_last=True)
 
@@ -400,7 +400,7 @@ if __name__ == '__main__':
 
         dev_set = Dataset_train(args, list_IDs=files_id_dev,
                                 labels=labels_dev,
-                                base_dir=os.path.join(args.database_path), algo=args.algo, format='')
+                                base_dir=os.path.join(args.database_path), algo=args.algo, format='', cut=args.cut)
 
         dev_loader = DataLoader(dev_set, batch_size=8,
                                 num_workers=10, shuffle=False)
@@ -477,7 +477,7 @@ if __name__ == '__main__':
             print('Model loaded : {}'.format(
                 os.path.join(model_save_path, 'best.pth')))
 
-        eval_tracks = ['LA', 'DF']
+        eval_tracks = ['DF']
         if args.comment_eval:
             model_tag = model_tag + '_{}'.format(args.comment_eval)
 

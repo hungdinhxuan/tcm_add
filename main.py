@@ -360,7 +360,7 @@ if __name__ == '__main__':
             print('Model loaded : {}'.format(
                 os.path.join(model_save_path, 'best.pth')))
 
-        eval_tracks = ['LA', 'DF']
+        eval_tracks = ['DF']
         if args.comment_eval:
             model_tag = model_tag + '_{}'.format(args.comment_eval)
 
@@ -476,7 +476,7 @@ if __name__ == '__main__':
             print('Model loaded : {}'.format(
                 os.path.join(model_save_path, 'best.pth')))
 
-        eval_tracks = ['LA', 'DF']
+        eval_tracks = ['DF']
         if args.comment_eval:
             model_tag = model_tag + '_{}'.format(args.comment_eval)
 
