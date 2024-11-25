@@ -14,6 +14,7 @@ class Dataset_train(Dataset):
         self.args=args
         self.cut=cut
         self.format=format
+        print('train/cut:', cut)
     def __len__(self):
         return len(self.list_IDs)
     def __getitem__(self, index):

@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from data_utils import Dataset_train, Dataset_eval
-from model import Model
+from aasist_ssl import Model
 from utils import reproducibility
 from utils import read_metadata, read_metadata_eval, read_metadata_other
 from data_utils_multiview import Dataset_var_eval, Dataset_var_eval2
@@ -29,7 +29,7 @@ def evaluate_accuracy(dev_loader, model, device, weight=[0.1, 0.9]):
             num_total += batch_size
             batch_x = batch_x.to(device)
             batch_y = batch_y.view(-1).type(torch.int64).to(device)
-            batch_out, _ = model(batch_x)
+            batch_out = model(batch_x)
             pred = batch_out.max(1)[1]
             correct += pred.eq(target).sum().item()
 
@@ -43,7 +43,8 @@ def evaluate_accuracy(dev_loader, model, device, weight=[0.1, 0.9]):
 
 
 def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+    data_loader = DataLoader(dataset, batch_size=batch_size,
+                             shuffle=False, drop_last=False)
     model.eval()
     fname_list = []
     score_list = []
@@ -51,7 +52,7 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     with torch.no_grad():
         for batch_x, utt_id in data_loader:
             batch_x = batch_x.to(device)
-            batch_out, _ = model(batch_x)
+            batch_out = model(batch_x)
             batch_score = (batch_out[:, 1]
                            ).data.cpu().numpy().ravel()
             # add outputs
@@ -89,7 +90,7 @@ def train_epoch(train_loader, model, lr, optim, device, weight=[0.1, 0.9]):
 
         batch_x = batch_x.to(device)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        batch_out, _ = model(batch_x)
+        batch_out = model(batch_x)
         batch_loss = criterion(batch_out, batch_y)
         pbar.set_description(f"Epoch {epoch}: cls_loss {batch_loss.item()}")
         optimizer.zero_grad()
@@ -100,7 +101,7 @@ def train_epoch(train_loader, model, lr, optim, device, weight=[0.1, 0.9]):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Conformer-W2V')
+    parser = argparse.ArgumentParser(description='AASIST_SSL-W2V')
     # Dataset
     parser.add_argument('--database_path', type=str, default='ASVspoof_database/',
                         help='Change this to user\'s full directory address of LA database (ASVspoof2019- for training & development (used as validation), ASVspoof2021 for evaluation scores). We assume that all three ASVspoof 2019 LA train, LA dev and ASVspoof2021 LA eval data folders are in the same database_path directory.')
@@ -134,17 +135,17 @@ if __name__ == '__main__':
     parser.add_argument('--emb-size', type=int, default=144, metavar='N',
                         help='embedding size')
     parser.add_argument('--heads', type=int, default=4, metavar='N',
-                        help='heads of the conformer encoder')
+                        help='heads of the AASIST_SSL encoder')
     parser.add_argument('--kernel_size', type=int, default=31, metavar='N',
                         help='kernel size conv module')
     parser.add_argument('--num_encoders', type=int, default=4, metavar='N',
-                        help='number of encoders of the conformer')
+                        help='number of encoders of the AASIST_SSL')
     parser.add_argument('--FT_W2V', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
-                    help='Whether to fine-tune the W2V or not')
+                        help='Whether to fine-tune the W2V or not')
     parser.add_argument('--var', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
-                    help='Whether to var eval or not')
+                        help='Whether to var eval or not')
     parser.add_argument('--cut', type=int, default=66800, metavar='N',
-                    help='cut size')
+                        help='cut size')
     # model save path
     parser.add_argument('--seed', type=int, default=1234,
                         help='random seed (default: 1234)')
@@ -233,7 +234,7 @@ if __name__ == '__main__':
     prefix_2021 = 'ASVspoof2021.{}'.format(track)
 
     # define model saving path
-    model_tag = 'Conformer_w_TCM_{}_{}_{}_ES{}_H{}_NE{}_KS{}_AUG{}_w_sin_pos'.format(
+    model_tag = 'AASIST_SSL_w_TCM_{}_{}_{}_ES{}_H{}_NE{}_KS{}_AUG{}_w_sin_pos'.format(
         track, args.loss, args.lr, args.emb_size, args.heads, args.num_encoders, args.kernel_size, args.algo)
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
@@ -272,7 +273,7 @@ if __name__ == '__main__':
         print('no. of training trials', len(files_id_train))
 
         train_set = Dataset_train(args, list_IDs=files_id_train, labels=label_trn, base_dir=os.path.join(
-            args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo, cut=args.cut)
+            args.database_path+'{}_{}_train/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo)
         train_loader = DataLoader(
             train_set, batch_size=args.batch_size, num_workers=10, shuffle=True, drop_last=True)
 
@@ -285,7 +286,7 @@ if __name__ == '__main__':
 
         dev_set = Dataset_train(args, list_IDs=files_id_dev,
                                 labels=labels_dev,
-                                base_dir=os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo, cut=args.cut)
+                                base_dir=os.path.join(args.database_path+'{}_{}_dev/'.format(prefix_2019.split('.')[0], args.track)), algo=args.algo)
 
         dev_loader = DataLoader(dev_set, batch_size=8,
                                 num_workers=10, shuffle=False)
@@ -386,7 +387,7 @@ if __name__ == '__main__':
         print('no. of training trials', len(files_id_train))
 
         train_set = Dataset_train(args, list_IDs=files_id_train, labels=label_trn, base_dir=os.path.join(
-            args.database_path), algo=args.algo, format='', cut=args.cut)
+            args.database_path), algo=args.algo, format='')
         train_loader = DataLoader(
             train_set, batch_size=args.batch_size, num_workers=10, shuffle=True, drop_last=True)
 
@@ -399,7 +400,7 @@ if __name__ == '__main__':
 
         dev_set = Dataset_train(args, list_IDs=files_id_dev,
                                 labels=labels_dev,
-                                base_dir=os.path.join(args.database_path), algo=args.algo, format='', cut=args.cut)
+                                base_dir=os.path.join(args.database_path), algo=args.algo, format='')
 
         dev_loader = DataLoader(dev_set, batch_size=8,
                                 num_workers=10, shuffle=False)
