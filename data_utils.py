@@ -6,13 +6,13 @@ from RawBoost import  process_Rawboost_feature
 from utils import pad
 			
 class Dataset_train(Dataset):
-    def __init__(self, args, list_IDs, labels, base_dir, algo, format='.flac'):
+    def __init__(self, args, list_IDs, labels, base_dir, algo, cut=66800, format='.flac'):
         self.list_IDs = list_IDs
         self.labels = labels
         self.base_dir = base_dir
         self.algo=algo
         self.args=args
-        self.cut=66800
+        self.cut=cut
         self.format=format
     def __len__(self):
         return len(self.list_IDs)

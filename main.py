@@ -41,8 +41,8 @@ def evaluate_accuracy(dev_loader, model, device,weight=[0.1, 0.9]):
     return val_loss
 
 
-def produce_evaluation_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
+def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     model.eval()
     fname_list = []
     score_list = []
@@ -137,7 +137,10 @@ if __name__ == '__main__':
                     help='number of encoders of the conformer')
     parser.add_argument('--FT_W2V', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                     help='Whether to fine-tune the W2V or not')
-    
+    parser.add_argument('--var', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+                    help='Whether to var eval or not')
+    parser.add_argument('--cut', type=int, default=66800, metavar='N',
+                    help='cut size')
     # model save path
     parser.add_argument('--seed', type=int, default=1234, 
                         help='random seed (default: 1234)')
