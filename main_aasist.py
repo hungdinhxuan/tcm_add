@@ -372,10 +372,10 @@ if __name__ == '__main__':
                 prefix_2021 = 'ASVspoof2021.{}'.format(tracks)
 
                 file_eval = read_metadata(dir_meta=os.path.join(
-                    args.protocols_path+'{}/{}_cm_protocols/{}.cm.eval.trl.txt'.format(tracks, prefix, prefix_2021)), is_eval=True)
+                    args.protocols_path+'{}_cm_protocols/{}.cm.eval.trl.txt'.format(prefix, prefix_2021)), is_eval=True)
                 print('no. of eval trials', len(file_eval))
                 eval_set = Dataset_eval(list_IDs=file_eval, base_dir=os.path.join(
-                    args.database_path+'{}/ASVspoof2021_{}_eval/'.format(tracks, tracks)), track=tracks)
+                    args.database_path+'ASVspoof2021_{}_eval/'.format(tracks)), track=tracks)
                 produce_evaluation_file(
                     eval_set, model, device, 'Scores/{}/{}.txt'.format(tracks, model_tag))
             else:
