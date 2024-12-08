@@ -12,6 +12,7 @@ import torch
 import random
 import librosa
 
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -21,7 +22,7 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-#torchaudio.set_audio_backend("soundfile")
+# torchaudio.set_audio_backend("soundfile")
 set_seed(1)
 torch.set_num_threads(1)
 
@@ -36,19 +37,21 @@ CUT_SIZE = 16000
 DESTINATION_PATH = f"0_large-corpus/trim_librosa"
 
 if not os.path.exists(DESTINATION_PATH):
-    os.makedirs(DESTINATION_PATH)   
+    os.makedirs(DESTINATION_PATH)
 
 THRESHOLD = 0.5  # Threshold for VAD to determine speech
+
 
 def process_line(line):
     line = line.strip().split()
     file = line[0]
     src_file_path = os.path.join(DATASET_PATH, file)
     waveform, sample_rate = librosa.load(src_file_path, sr=SAMPLE_RATE)
-        # convert to tensor
-    waveform = torch.from_numpy(waveform)
 
     waveform = librosa.effects.trim(waveform)[0]
+
+    # convert to tensor
+    waveform = torch.from_numpy(waveform)
 
     dst_file_path = os.path.join(DESTINATION_PATH, file)
 
@@ -72,4 +75,3 @@ futures = [executor.submit(process_line, line) for line in lines]
 
 for future in tqdm(as_completed(futures), total=len(futures)):
     result = future.result()
-    
