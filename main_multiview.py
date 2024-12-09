@@ -329,7 +329,7 @@ if __name__ == '__main__':
                         help='var-length')
     parser.add_argument('--is_multiview', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='Multiview train')
-    parser.add_argument('--random_start', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+    parser.add_argument('--random_start', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='random_start train')
     parser.add_argument('--train', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='Whether to train the model')

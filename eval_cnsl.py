@@ -4,7 +4,7 @@ import os
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from data_utils import Dataset_eval
+from data_utils import Dataset_eval_cnsl as Dataset_eval
 from data_utils_multiview import Dataset_var_eval, Dataset_var_eval2
 from model import Model
 from utils import reproducibility
@@ -66,6 +66,8 @@ if __name__ == '__main__':
                     help='batch_size ')
     parser.add_argument('--cut', type=int, default=66800, metavar='N',
                     help='cut size ')
+    parser.add_argument('--random_start', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+                        help='random_start train')
     args = parser.parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'                  
     print('Device: {}'.format(device))
@@ -117,5 +119,5 @@ if __name__ == '__main__':
             eval_set=Dataset_var_eval2(list_IDs = file_eval,base_dir = args.database_path, format='')
             produce_evaluation_file(eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
         else:
-            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = args.database_path, cut=args.cut, track='',format='')
+            eval_set=Dataset_eval(list_IDs = file_eval,base_dir = args.database_path, cut=args.cut, track='',format='', random_start=args.random_start)
             produce_evaluation_file(eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)

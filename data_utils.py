@@ -75,3 +75,24 @@ class Dataset_eval(Dataset):
             X_pad = pad(X,self.cut)
         x_inp = Tensor(X_pad)
         return x_inp, utt_id 
+
+class Dataset_eval_cnsl(Dataset):
+    def __init__(self, list_IDs, base_dir, track, cut=66800, format='.flac',random_start=False):
+        '''self.list_IDs	: list of strings (each string: utt key),'''
+        self.list_IDs = list_IDs
+        self.base_dir = base_dir
+        self.cut = cut # take ~4 sec audio 
+        self.track = track
+        self.format=format
+        self.random_start=random_start
+    def __len__(self):
+        return len(self.list_IDs)
+    def __getitem__(self, index):  
+        utt_id = self.list_IDs[index]
+        X, fs = librosa.load(self.base_dir+utt_id+self.format, sr=16000)
+        if self.cut < 0:
+            X_pad = X
+        else:
+            X_pad = pad_cnsl(X, padding_type='repeat', max_len=self.cut, random_start=self.random_start)
+        x_inp = Tensor(X_pad)
+        return x_inp, utt_id
