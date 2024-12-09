@@ -129,7 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.000001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--loss', type=str, default='WCE')
-    parser.add_argument('--random_start', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+    parser.add_argument('--random_start', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='random_start train')
     # model parameters
     parser.add_argument('--emb-size', type=int, default=144, metavar='N',
