@@ -313,7 +313,8 @@ if __name__ == '__main__':
                         help='number of encoders of the conformer')
     parser.add_argument('--FT_W2V', default=True, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='Whether to fine-tune the W2V or not')
-
+    parser.add_argument('--cut', type=int, default=66800, metavar='N',
+                        help='cut size ')
     # model save path
     parser.add_argument('--seed', type=int, default=1234,
                         help='random seed (default: 1234)')
