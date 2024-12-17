@@ -497,7 +497,7 @@ if __name__ == '__main__':
     prefix_2021 = 'ASVspoof2021.{}'.format(track)
 
     # define model saving path
-    model_tag = 'Conformer_w_TCM_{}_{}_{}_ES{}_H{}_NE{}_KS{}_AUG{}_w_sin_pos'.format(
+    model_tag = 'Conformer_KD_w_TCM_{}_{}_{}_ES{}_H{}_NE{}_KS{}_AUG{}_w_sin_pos'.format(
         track, args.loss, args.lr, args.emb_size, args.heads, args.num_encoders, args.kernel_size, args.algo)
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
