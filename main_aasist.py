@@ -130,7 +130,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.000001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--loss', type=str, default='WCE')
-
+    parser.add_argument('--ckpt_path', type=str,
+                        help='path to the model weigth')
     # model parameters
     parser.add_argument('--emb-size', type=int, default=144, metavar='N',
                         help='embedding size')

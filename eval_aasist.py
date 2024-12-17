@@ -4,71 +4,48 @@ import os
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from data_utils import Dataset_eval_cnsl as Dataset_eval
+from data_utils import Dataset_eval
 from data_utils_multiview import Dataset_var_eval, Dataset_var_eval2
-from model import Model
+from aasist_ssl import Model
 from utils import reproducibility
 from utils import read_metadata, read_metadata_eval, read_metadata_other
 import numpy as np
 from tqdm import tqdm
 
 
-def produce_evaluation_file(dataset, model, device, save_path, batch_size, spec=False):
-    if not spec:
-        data_loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-        model.eval()
-        fname_list = []
-        score_list = []
-        text_list = []
-        pbar = tqdm(data_loader)
-        with torch.no_grad():
-            for i, (batch_x, utt_id) in enumerate(pbar):
-                batch_x = batch_x.to(device)
-                batch_out, _ = model(batch_x)
-                batch_score = (batch_out[:, 1]
-                               ).data.cpu().numpy().ravel()
-                # add outputs
-                fname_list.extend(utt_id)
-                score_list.extend(batch_score.tolist())
+def produce_evaluation_file(dataset, model, device, save_path, batch_size):
+    data_loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+    model.eval()
+    fname_list = []
+    score_list = []
+    text_list = []
+    pbar = tqdm(data_loader)
+    with torch.no_grad():
+        for i, (batch_x, utt_id) in enumerate(pbar):
+            batch_x = batch_x.to(device)
+            batch_out = model(batch_x)
+            batch_score = (batch_out[:, 1]
+                           ).data.cpu().numpy().ravel()
+            # add outputs
+            fname_list.extend(utt_id)
+            score_list.extend(batch_score.tolist())
 
-        for f, cm in zip(fname_list, score_list):
-            text_list.append('{} {}'.format(f, cm))
-        del fname_list
-        del score_list
-        with open(save_path, 'a+') as fh:
-            for i in range(0, len(text_list), 500):
-                batch = text_list[i:i+500]
-                fh.write('\n'.join(batch) + '\n')
-        del text_list
-        fh.close()
-        print('Scores saved to {}'.format(save_path))
-    else:
-        data_loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-        model.eval()
-        fname_list = []
-        score_list = []
-        text_list = []
-        pbar = tqdm(data_loader)
-        with torch.no_grad():
-            for i, (batch_x, utt_id) in enumerate(pbar):
-                batch_x = batch_x.to(device)
-                batch_out, _ = model(batch_x)
-                batch_score = batch_out.data.cpu().numpy().tolist()
-                # add outputs
-                fname_list.extend(utt_id)
-                score_list.extend(batch_score.tolist())
-
-                with open(save_path, 'a+') as fh:
-                    for f, cm in zip(fname_list, score_list):
-                        fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
-
-        print('Scores saved to {}'.format(save_path))
+    for f, cm in zip(fname_list, score_list):
+        text_list.append('{} {}'.format(f, cm))
+    del fname_list
+    del score_list
+    with open(save_path, 'a+') as fh:
+        for i in range(0, len(text_list), 500):
+            batch = text_list[i:i+500]
+            fh.write('\n'.join(batch) + '\n')
+    del text_list
+    fh.close()
+    print('Scores saved to {}'.format(save_path))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Conformer-W2V')
+    parser = argparse.ArgumentParser(description='AASIST-W2V')
     parser.add_argument('--database_path', type=str, default='ASVspoof_database/',
                         help='Change this to user\'s directory address of LA database')
     parser.add_argument('--protocols_path', type=str, default='ASVspoof_database/',
@@ -89,14 +66,10 @@ if __name__ == '__main__':
                         help='Comment to describe the saved scores')
     parser.add_argument('--var', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
                         help='var-length')
-    parser.add_argument('--spec', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
-                        help='spec eval')
     parser.add_argument('--batch_size', type=int, default=64, metavar='N',
                         help='batch_size ')
     parser.add_argument('--cut', type=int, default=66800, metavar='N',
                         help='cut size ')
-    parser.add_argument('--random_start', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
-                        help='random_start train')
     args = parser.parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: {}'.format(device))
@@ -158,13 +131,9 @@ if __name__ == '__main__':
             eval_set = Dataset_var_eval2(
                 list_IDs=file_eval, base_dir=args.database_path, format='')
             produce_evaluation_file(
-                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size, spec=args.spec)
-            eval_set = Dataset_var_eval2(
-                list_IDs=file_eval, base_dir=args.database_path, format='')
-            produce_evaluation_file(
                 eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
         else:
-            eval_set = Dataset_eval(list_IDs=file_eval, base_dir=args.database_path,
-                                    cut=args.cut, track='', format='', random_start=args.random_start)
+            eval_set = Dataset_eval(
+                list_IDs=file_eval, base_dir=args.database_path, cut=args.cut, track='', format='')
             produce_evaluation_file(
-                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size, spec=args.spec)
+                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)

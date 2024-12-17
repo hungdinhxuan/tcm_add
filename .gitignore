@@ -1,3 +1,6 @@
 ASVspoof_database
 *.pt
 __pycache__
+baseline_emb_last
+emb_last
+emb
