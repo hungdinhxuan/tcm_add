@@ -14,57 +14,54 @@ from tqdm import tqdm
 
 
 def produce_evaluation_file(dataset, model, device, save_path, batch_size, spec=False):
-    if not spec:
-        data_loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-        model.eval()
-        fname_list = []
-        score_list = []
-        text_list = []
-        pbar = tqdm(data_loader)
+    """
+    Produce an evaluation file with model scores for a given dataset.
+
+    Args:
+        dataset: Input dataset
+        model: Trained model
+        device: Computing device
+        save_path: Path to save the evaluation results
+        batch_size: Batch size for processing
+        spec: Special processing flag
+    """
+    # Prepare data loader
+    data_loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, drop_last=False, pin_memory=True if device == 'cuda' else False
+    )
+
+    # Set model to evaluation mode
+    model.eval()
+
+    # Use context manager for file writing to ensure proper closure
+    with open(save_path, 'a+') as fh:
+        # Use torch.no_grad for inference to reduce memory usage and improve performance
         with torch.no_grad():
-            for i, (batch_x, utt_id) in enumerate(pbar):
+            # Use tqdm for progress tracking
+            for i, (batch_x, utt_id) in enumerate(tqdm(data_loader)):
+                # Move batch to device
                 batch_x = batch_x.to(device)
+
+                # Perform model inference
                 batch_out, _ = model(batch_x)
-                batch_score = (batch_out[:, 1]
-                               ).data.cpu().numpy().ravel()
-                # add outputs
-                fname_list.extend(utt_id)
-                score_list.extend(batch_score.tolist())
 
-        for f, cm in zip(fname_list, score_list):
-            text_list.append('{} {}'.format(f, cm))
-        del fname_list
-        del score_list
-        with open(save_path, 'a+') as fh:
-            for i in range(0, len(text_list), 500):
-                batch = text_list[i:i+500]
-                fh.write('\n'.join(batch) + '\n')
-        del text_list
-        fh.close()
-        print('Scores saved to {}'.format(save_path))
-    else:
-        data_loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-        model.eval()
-        fname_list = []
-        score_list = []
-        text_list = []
-        pbar = tqdm(data_loader)
-        with torch.no_grad():
-            for i, (batch_x, utt_id) in enumerate(pbar):
-                batch_x = batch_x.to(device)
-                batch_out, _ = model(batch_x)
-                batch_score = batch_out.data.cpu().numpy().tolist()
-                # add outputs
-                fname_list.extend(utt_id)
-                score_list.extend(batch_score.tolist())
+                # Process scores based on spec flag
+                if not spec:
+                    # Single score column
+                    batch_score = batch_out[:, 1].data.cpu().numpy().ravel()
 
-                with open(save_path, 'a+') as fh:
-                    for f, cm in zip(fname_list, score_list):
-                        fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
+                    # Write scores directly to file
+                    for f, cm in zip(utt_id, batch_score):
+                        fh.write(f'{f} {cm}\n')
+                else:
+                    # Multiple score columns
+                    batch_score = batch_out.data.cpu().numpy().tolist()
 
-        print('Scores saved to {}'.format(save_path))
+                    # Write scores directly to file
+                    for f, cm in zip(utt_id, batch_score):
+                        fh.write(f'{f} {cm[0]} {cm[1]}\n')
+
+    print(f'Scores saved to {save_path}')
 
 
 if __name__ == '__main__':
@@ -96,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--cut', type=int, default=66800, metavar='N',
                         help='cut size ')
     parser.add_argument('--random_start', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
-                        help='random_start train')
+                        help='random_start eval')
     args = parser.parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: {}'.format(device))
@@ -159,6 +156,10 @@ if __name__ == '__main__':
                 list_IDs=file_eval, base_dir=args.database_path, format='')
             produce_evaluation_file(
                 eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size, spec=args.spec)
+            eval_set = Dataset_var_eval2(
+                list_IDs=file_eval, base_dir=args.database_path, format='')
+            produce_evaluation_file(
+                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
         else:
             eval_set = Dataset_eval(list_IDs=file_eval, base_dir=args.database_path,
                                     cut=args.cut, track='', format='', random_start=args.random_start)

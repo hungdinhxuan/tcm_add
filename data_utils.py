@@ -85,6 +85,8 @@ class Dataset_eval_cnsl(Dataset):
         self.track = track
         self.format=format
         self.random_start=random_start
+        print('eval/cut:', cut)
+        print('eval/random_start:', random_start)
     def __len__(self):
         return len(self.list_IDs)
     def __getitem__(self, index):  
