@@ -13,74 +13,58 @@ import numpy as np
 from tqdm import tqdm
 
 
-# def produce_evaluation_file(dataset, model, device, save_path, batch_size, spec=False):
-#     data_loader = DataLoader(
-#         dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-#     model.eval()
-#     fname_list = []
-#     score_list = []
-#     text_list = []
-#     pbar = tqdm(data_loader)
-#     with torch.no_grad():
-#         for i, (batch_x, utt_id) in enumerate(pbar):
-#             batch_x = batch_x.to(device)
-#             batch_out, _ = model(batch_x)
-#             if spec:
-#                 fname_list.extend(utt_id)
-#                 score_list.extend(batch_out.data.cpu().numpy().tolist())
-#             else:
-#                 batch_score = (batch_out[:, 1]).data.cpu().numpy().ravel()
-#                 fname_list.extend(utt_id)
-#                 score_list.extend(batch_score.tolist())
-
-#     with open(save_path, 'a+') as fh:
-#         if spec:
-#             for f, cm in zip(fname_list, score_list):
-#                 fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
-#         else:
-#             for f, cm in zip(fname_list, score_list):
-#                 text_list.append('{} {}'.format(f, cm))
-#             for i in range(0, len(text_list), 500):
-#                 batch = text_list[i:i+500]
-#                 fh.write('\n'.join(batch) + '\n')
-
-#     print('Scores saved to {}'.format(save_path))
 def produce_evaluation_file(dataset, model, device, save_path, batch_size, spec=False):
-    # Use prefetch_generator for faster data loading
-    # from torch.utils.data import DataLoader
-    # from torch.utils.data.dataloader import default_collate
+    if not spec:
+        data_loader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+        model.eval()
+        fname_list = []
+        score_list = []
+        text_list = []
+        pbar = tqdm(data_loader)
+        with torch.no_grad():
+            for i, (batch_x, utt_id) in enumerate(pbar):
+                batch_x = batch_x.to(device)
+                batch_out, _ = model(batch_x)
+                batch_score = (batch_out[:, 1]
+                               ).data.cpu().numpy().ravel()
+                # add outputs
+                fname_list.extend(utt_id)
+                score_list.extend(batch_score.tolist())
 
-    # Optimize data loading
-    data_loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        drop_last=False,
-        pin_memory=True,  # Enables faster data transfer to GPU
-        num_workers=4     # Parallel data loading (adjust based on your system)
-    )
+        for f, cm in zip(fname_list, score_list):
+            text_list.append('{} {}'.format(f, cm))
+        del fname_list
+        del score_list
+        with open(save_path, 'a+') as fh:
+            for i in range(0, len(text_list), 500):
+                batch = text_list[i:i+500]
+                fh.write('\n'.join(batch) + '\n')
+        del text_list
+        fh.close()
+        print('Scores saved to {}'.format(save_path))
+    else:
+        data_loader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+        model.eval()
+        fname_list = []
+        score_list = []
+        text_list = []
+        pbar = tqdm(data_loader)
+        with torch.no_grad():
+            for i, (batch_x, utt_id) in enumerate(pbar):
+                batch_x = batch_x.to(device)
+                batch_out, _ = model(batch_x)
+                batch_score = batch_out.data.cpu().numpy().tolist()
+                # add outputs
+                fname_list.extend(utt_id)
+                score_list.extend(batch_score.tolist())
 
-    model.eval()
+                with open(save_path, 'a+') as fh:
+                    for f, cm in zip(fname_list, score_list):
+                        fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
 
-    # Use more efficient list management
-    with torch.no_grad(), open(save_path, 'w') as fh:  # Use 'w' instead of 'a+' to overwrite
-        for batch_x, utt_id in tqdm(data_loader, desc="Processing"):
-            batch_x = batch_x.to(device, non_blocking=True)
-            batch_out, _ = model(batch_x)
-
-            # Convert to numpy outside the loop to reduce overhead
-            if spec:
-                # Handle multi-dimensional output for spectral data
-                batch_scores = batch_out.data.cpu().numpy()
-                for f, cm in zip(utt_id, batch_scores):
-                    fh.write(f'{f} {cm[0]} {cm[1]}\n')
-            else:
-                # Get second column scores and flatten
-                batch_scores = batch_out[:, 1].data.cpu().numpy()
-                for f, cm in zip(utt_id, batch_scores):
-                    fh.write(f'{f} {cm}\n')
-
-    print(f'Scores saved to {save_path}')
+        print('Scores saved to {}'.format(save_path))
 
 
 if __name__ == '__main__':
