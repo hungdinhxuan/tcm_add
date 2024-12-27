@@ -11,11 +11,12 @@ from utils import reproducibility
 from utils import read_metadata, read_metadata_eval, read_metadata_other
 import numpy as np
 from tqdm import tqdm
+from eval_aasist import MyCollator
 
 
-def produce_evaluation_file(dataset, model, device, save_path, batch_size):
+def produce_evaluation_file(dataset, model, device, save_path, batch_size, collator=None):
     data_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+        dataset, batch_size=batch_size, shuffle=False, drop_last=False, collate_fn=collator)
     model.eval()
     fname_list = []
     score_list = []
@@ -70,6 +71,13 @@ if __name__ == '__main__':
                         help='batch_size ')
     parser.add_argument('--cut', type=int, default=66800, metavar='N',
                         help='cut size ')
+    parser.add_argument('--eval_chunking', default=False, type=lambda x: (str(x).lower() in ['true', 'yes', '1']),
+                        help='chunking eval')
+    parser.add_argument('--chunk_size', type=int, default=16000, metavar='N',
+                        help='chunk_size ')
+    parser.add_argument('--overlap_size', type=int, default=8000, metavar='N',
+                        help='overlap_size ')
+
     args = parser.parse_args()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: {}'.format(device))
@@ -126,14 +134,19 @@ if __name__ == '__main__':
         file_eval, _ = read_metadata_other(
             dir_meta=args.protocols_path, is_eval=True)
         print('no. of eval trials', len(file_eval))
+        eval_chunking = args.eval_chunking
+        collator_params = {'enable_chunking': eval_chunking,
+                           'chunk_size': args.chunk_size, 'overlap_size':  args.overlap_size}
+        my_collator = MyCollator(
+            **collator_params) if eval_chunking else None
         if args.var:
             print('var-length eval')
             eval_set = Dataset_var_eval2(
                 list_IDs=file_eval, base_dir=args.database_path, format='')
             produce_evaluation_file(
-                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
+                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size, collator=my_collator)
         else:
             eval_set = Dataset_eval(
                 list_IDs=file_eval, base_dir=args.database_path, cut=args.cut, track='', format='')
             produce_evaluation_file(
-                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size)
+                eval_set, model, device, 'Scores/{}.txt'.format(model_tag), args.batch_size, collator=my_collator)
