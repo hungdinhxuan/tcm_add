@@ -1,0 +1,86 @@
+# Dataset paths
+database_path: 'ASVspoof_database/'  # Path to ASVspoof database directory
+protocols_path: 'ASVspoof_database/'  # Path to protocols directory
+
+# Training hyperparameters
+batch_size: 12
+num_epochs: 7
+lr: 0.000001
+weight_decay: 0.0001
+loss: 'WCE'
+
+# Model parameters
+emb_size: 144
+heads: 4
+kernel_size: 31
+num_encoders: 4
+FT_W2V: true
+cut: 66800
+
+# Model saving and seed
+seed: 1234
+comment: null
+comment_eval: null
+
+# Knowledge distillation parameters
+alpha: 0.1
+T: 4
+
+# Training configuration
+dataset: 'asvspoof'
+var: false
+is_multiview: true
+random_start: false
+train: true
+
+# Evaluation configuration
+n_mejores_loss: 5
+average_model: true
+n_average_model: 5
+
+# Rawboost data augmentation parameters
+algo: 3  # 0: No augmentation, 1-8: Different augmentation algorithms
+  
+# LnL_convolutive_noise parameters  
+nBands: 5
+minF: 20
+maxF: 8000
+minBW: 100
+maxBW: 1000
+minCoeff: 10
+maxCoeff: 100
+minG: 0
+maxG: 0
+minBiasLinNonLin: 5
+maxBiasLinNonLin: 20
+N_f: 5
+P: 10
+g_sd: 2
+  
+# SSI_additive_noise parameters
+SNRmin: 10
+SNRmax: 40
+
+weighted_views:
+  '1': 0.9
+  '2': 0.9
+  '3': 0.9
+  '4': 0.9
+
+view_padding_configs:
+  '1':
+    padding_type: repeat
+    random_start: True
+  '2':
+    padding_type: repeat
+    random_start: True
+  '3':
+    padding_type: repeat
+    random_start: True
+  '4':
+    padding_type: repeat
+    random_start: True
+
+
+use_tensorboard: True
+use_wandb: True
