@@ -28,7 +28,7 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size, spec=
     """
     # Prepare data loader
     data_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, drop_last=False, pin_memory=True if device == 'cuda' else False, collate_fn=collator
+        dataset, batch_size=1, shuffle=False, drop_last=False, pin_memory=True if device == 'cuda' else False, collate_fn=collator
     )
 
     # Set model to evaluation mode

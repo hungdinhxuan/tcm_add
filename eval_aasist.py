@@ -146,8 +146,15 @@ if __name__ == '__main__':
 
     # Loading model
     model = Model(args, device)
-    model = nn.DataParallel(model)
-    model.load_state_dict(torch.load(args.ckpt_path, map_location=device))
+    # model = nn.DataParallel(model)
+    pretrained_dict = torch.load(args.ckpt_path, map_location=device)
+    pretrained_dict = {k.replace('.module.', ''): v for k, v in pretrained_dict.items()}
+    pretrained_dict = {k.replace('module.', ''): v for k, v in pretrained_dict.items()}
+    pretrained_dict = {key.replace(
+        "_orig_mod.", ""): value for key, value in pretrained_dict.items()}
+    model.load_state_dict(pretrained_dict)
+
+    # model.load_state_dict(torch.load(args.ckpt_path, map_location=device))
     model = model.to(device)
     model.eval()
     print('Model loaded : {}'.format(args.ckpt_path))
